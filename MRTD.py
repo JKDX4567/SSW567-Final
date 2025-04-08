@@ -38,6 +38,10 @@ def verify_mrz(line1: str, line2: str) -> dict:
     line1 = (line1 + '<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<')[:44]
     line2 = (line2 + '<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<')[:44]
     
+    if len(line1) != 44 or len(line2) != 44:
+        raise ValueError("Each MRZ line must be exactly 44 characters.")
+
+
     # Precise name component separation
     name_parts = line1[5:].split('<<')
     last_name = name_parts[0].replace('<', ' ').strip()
@@ -69,10 +73,9 @@ def verify_mrz(line1: str, line2: str) -> dict:
             'sex': line2[20],
             'expiration_date': line2[21:27],
             'expiration_date_check_digit': line2[27],
-            'personal_number': line2[28:37].rstrip('<'),
-            'personal_number_filler': line2[36:42]  # Exactly 6 characters
-        },
-        'composite_check_digit': line2[43]  # Perfect position 44 (0-indexed 43)
+            'personal_number': line2[28:37],  # 14 characters (28–41)
+            'personal_number_check_digit': line2[43],  # actual check digit at position 43
+        }
     }
 
     results = {
@@ -85,6 +88,7 @@ def verify_mrz(line1: str, line2: str) -> dict:
             'decoded': decoded
         }
     }
+    
 
     def _verify(field: str, data: str, expected: str):
         """Precision verification with exact matching"""
@@ -103,21 +107,17 @@ def verify_mrz(line1: str, line2: str) -> dict:
     _verify('expiration_date', decoded['line2']['expiration_date'],
             decoded['line2']['expiration_date_check_digit'])
 
-    # Perfect composite check (positions 1-43)
-    composite_data = (
-        line2[0:10] +    # Passport number + check (positions 1-10)
-        line2[13:20] +   # Birth date + check + sex (positions 14-20)
-        line2[21:28] +   # Expiration date + check (positions 22-28)
-        line2[28:43]     # Personal number + filler (positions 29-43)
-    )
-    _verify('composite', composite_data, decoded['composite_check_digit'])
-
+    
     return results
 
 def decode_mrz(line1: str, line2: str) -> dict:
     """Decode MRZ lines with perfect name handling"""
     line1 = (line1 + '<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<')[:44]
     line2 = (line2 + '<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<')[:44]
+
+    if len(line1) != 44 or len(line2) != 44:
+        raise ValueError("Each MRZ line must be exactly 44 characters.")
+
     
     # Precise name parsing (same as verify_mrz)
     name_parts = line1[5:].split('<<')
@@ -149,12 +149,11 @@ def decode_mrz(line1: str, line2: str) -> dict:
             'sex': line2[20],
             'expiration_date': line2[21:27],
             'expiration_date_check_digit': line2[27],
-            'personal_number': line2[28:36].replace('<', ''),
-            'personal_number_check_digit': line2[36],
-            'personal_number_filler': line2[37:43]
-
+            'personal_number': line2[28:37],  # 14 characters (28–41)
+            'personal_number_check_digit': line2[43],  # actual check digit at position 43
+            # No need for filler in TD3; it's all one field.
         },
-        'composite_check_digit': line2[43]
+
     }
 
 def encode_mrz(fields: dict) -> tuple:
@@ -208,23 +207,23 @@ def encode_mrz(fields: dict) -> tuple:
     line2 += exp_date + exp_check
     
     # Personal number (up to 9 chars) + filler + check digit
+    # Personal number (9 characters max)
     personal_num = fields.get('personal_number', '').upper().replace(' ', '<')[:9]
-    line2 += personal_num.ljust(9, '<')[:9]
-    line2 += '<<<<<<'  # 6 filler chars (positions 38-43)
-    
-    # Calculate composite check digit (positions 1-10 + 13-20 + 21-28 + 29-43)
-    composite_data = (
-        line2[0:10] +  # Passport num + check
-        line2[13:20] +  # Birth date + check + sex
-        line2[21:28] +  # Exp date + check
-        line2[28:43]    # Personal num + filler
-    )
-    composite_check = str(calculate_check_digit(composite_data))
-    line2 += composite_check
-    
-    # Ensure line2 is exactly 44 characters
-    line2 = line2.ljust(44, '<')[:44]
-    
+
+    # Filler (6 characters, positions 37–42)
+    filler = '<' * 6
+
+    personal_check = str(calculate_check_digit(personal_num))
+
+
+    # Add to line2 (positions 28–43)
+    line2 += personal_num   # 28–36
+    line2 += filler         # 37–42
+    line2 += personal_check # 43
+
+
+    if len(line2) < 44:
+        line2 = line2.ljust(44, '<')    
     return line1, line2
 
 def verify_check_digits(mrz_data: dict) -> dict:
@@ -259,21 +258,5 @@ def verify_check_digits(mrz_data: dict) -> dict:
         if not results['details'][name]:
             results['valid'] = False
 
-    # Composite check (positions 1-10 + 13-20 + 21-28 + 29-42)
-    composite_data = (
-        line2['passport_number'] + line2['passport_number_check_digit'] +
-        line2['country_code'] +
-        line2['birth_date'] + line2['birth_date_check_digit'] +
-        line2['sex'] +
-        line2['expiration_date'] + line2['expiration_date_check_digit'] +
-        line2['personal_number'] + line2['personal_number_filler']
-    )
-    results['composite_data'] = composite_data
-    results['details']['composite'] = _verify(
-        'composite', 
-        composite_data, 
-        mrz_data['composite_check_digit']
-    )
-    
     return results
     

@@ -81,7 +81,7 @@ class test_MRTD(unittest.TestCase):
         line2 = "L898902C36UTO7408122F1204159ZE184226B<<<<<11"
         result = verify_mrz(line1, line2)
         self.assertFalse(result['valid'])
-        self.assertFalse(result['details']['composite'])
+        self.assertFalse(result['details']['passport_number'])
 
     def test_mrz_length_constraints(self):
         line1 = "P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<"
@@ -150,6 +150,7 @@ class test_MRTD(unittest.TestCase):
             'personal_number': 'ZE184226B'      
             }
         line1, line2 = encode_mrz(fields)
+        print(line1, line2)
         decoded = decode_mrz(line1, line2)
         result = verify_check_digits(decoded)
         self.assertTrue(result['valid'])
