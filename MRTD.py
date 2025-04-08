@@ -69,7 +69,7 @@ def verify_mrz(line1: str, line2: str) -> dict:
             'sex': line2[20],
             'expiration_date': line2[21:27],
             'expiration_date_check_digit': line2[27],
-            'personal_number': line2[28:36].replace('<', ''),
+            'personal_number': line2[28:37].rstrip('<'),
             'personal_number_filler': line2[36:42]  # Exactly 6 characters
         },
         'composite_check_digit': line2[43]  # Perfect position 44 (0-indexed 43)
@@ -150,7 +150,9 @@ def decode_mrz(line1: str, line2: str) -> dict:
             'expiration_date': line2[21:27],
             'expiration_date_check_digit': line2[27],
             'personal_number': line2[28:36].replace('<', ''),
-            'personal_number_filler': line2[36:42]
+            'personal_number_check_digit': line2[36],
+            'personal_number_filler': line2[37:43]
+
         },
         'composite_check_digit': line2[43]
     }
